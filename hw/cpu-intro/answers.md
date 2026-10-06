@@ -18,7 +18,10 @@ total time:10
 CPU utilization:100%
 - Reasoning / 理由:两个进程全部为CPU指令，没有I/O操作。调度器在进程执行完CPU指令后切换，CPU全程不会空闲，总耗时等于两个进程CPU指令相加。
 - Verified result / 验证结果:
-- Analysis / 分析:
+Stats: Total Time 10
+Stats: CPU Busy 10 (100.00%)
+Stats: IO Busy  0 (0.00%)
+- Analysis / 分析:两个进程都只用cpu时，cpu不会空闲
 ## Q2
 - Prediction / 预测:
 ```       
@@ -38,8 +41,10 @@ Time        PID: 0        PID: 1           CPU           IOs
 total time:11
 CPU utilization:6/11
 - Reasoning / 理由:PID0先执行全部CPU指令，PID1要等PID0结束才获得CPU。PID1执行I/O，一次完整I/O需要7个tick。PID1进入阻塞后没有就绪进程可以运行，CPU空闲等待I/O完成。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 11
+Stats: CPU Busy 6 (54.55%)
+Stats: IO Busy  5 (45.45%)
+- Analysis / 分析:进程执行过程中会触发I/O操作。当进程发起I/O请求时，它会立刻进入阻塞状态，CPU就调度给其他就绪进程；等I/O操作完成后，原来的进程回到就绪队列，等待再次获得CPU。因此I/O等待期间CPU可以执行别的任务，提升CPU利用率，整体总运行时间会缩短。
 ## Q3
 - Prediction / 预测:
 ```
@@ -55,8 +60,10 @@ Time        PID: 0        PID: 1           CPU           IOs
 total time:7
 CPU utilization:6/7
 - Reasoning / 理由:PID0发起I/O之后进入阻塞。在I/O阻塞的时间片，CPU可以调度运行PID1的CPU任务。I/O设备工作与CPU计算并行，充分利用CPU资源，缩短整体总时间。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 7
+Stats: CPU Busy 6 (85.71%)
+Stats: IO Busy  5 (71.43%)
+- Analysis / 分析:采用轮转调度（Round-Robin），设置固定时间片。每当进程用完分配的时间片，无论任务有没有做完，都会被调度器换下CPU，就绪队列里下一个进程获得CPU。频繁的进程切换会带来额外开销，会让整体完成时间变长，CPU利用率相比连续执行会下降。
 ## Q4
 - Prediction / 预测:
 ```
@@ -76,8 +83,10 @@ Time        PID: 0        PID: 1           CPU           IOs
 total time:11
 CPU utilization:6/11
 - Reasoning / 理由:使用 SWITCH_ON_END 策略，只有进程全部指令结束才切换。PID0发起I/O的时候不会触发上下文切换，PID1保持就绪。CPU空转等待PID0完整完成I/O整套流程，之后才运行PID1。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 11
+Stats: CPU Busy 6 (54.55%)
+Stats: IO Busy  5 (45.45%)
+- Analysis / 分析:进程包含CPU计算与I/O交替执行的行为。每当进程发起I/O，进程阻塞，CPU交给其他就绪进程；I/O结束后进程重新回到就绪队列等待。多个进程的I/O等待时间可以相互重叠，这是提升CPU利用率的核心。
 ## Q5
 - Prediction / 预测:
 ```
@@ -93,8 +102,10 @@ Time        PID: 0        PID: 1           CPU           IOs
 total time:7
 CPU utilization:6/7
 - Reasoning / 理由:开启I/O发生时切换策略，进程发起I/O就切换到就绪的其他进程。I/O设备工作期间CPU执行PID1的计算任务，硬件和CPU工作重叠，减少总运行时长，提高CPU利用率。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 7
+Stats: CPU Busy 6 (85.71%)
+Stats: IO Busy  5 (71.43%)
+- Analysis / 分析:同样是轮转调度，缩短时间片。时间片越小，进程切换就会越频繁。上下文切换带来的损耗占比上升，会拉高整体总完成时间，CPU利用率进一步降低。时间片长短直接影响切换次数。
 ## Q6
 - Prediction / 预测:
 ```
@@ -134,8 +145,10 @@ Time        PID: 0        PID: 1        PID: 2        PID: 3           CPU      
 total time:31
 CPU utilization:21/31     
 - Reasoning / 理由:调度策略 SWITCH_ON_IO 、 IO_RUN_LATER 。PID0每次发起I/O就切换其他CPU‑bound进程；I/O硬件完成后PID0仅进入READY就绪队列，不会抢占CPU，需要等到调度轮到它才可以继续执行。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 31
+Stats: CPU Busy 21 (67.74%)
+Stats: IO Busy  15 (48.39%)
+- Analysis / 分析:这里采用的调度策略是一旦进程开始运行，就持续执行直到进程主动放弃CPU（进程结束或者发起I/O），不会因为时间片被抢占。只有进程触发I/O或者运行结束，才会发生调度切换，属于非抢占式调度。
 ## Q7
 - Prediction / 预测:
 ```
@@ -165,8 +178,10 @@ Time        PID: 0        PID: 1        PID: 2        PID: 3           CPU      
 total time:21
 CPU utilization:100%
 - Reasoning / 理由:使用 IO_RUN_IMMEDIATE ，一旦I/O硬件完成，PID0立刻抢占CPU处理I/O完成。不用在就绪队列排队，减少I/O进程的等待延迟，能够尽快发起下一轮I/O，提升I/O设备利用效率。
-- Verified result / 验证结果:
-- Analysis / 分析:
+- Verified result / 验证结果:Stats: Total Time 21
+Stats: CPU Busy 21 (100.00%)
+Stats: IO Busy  15 (71.43%)
+- Analysis / 分析:当进程完成I/O之后，需要等到当前正在CPU上运行的进程主动让出CPU，才能得到调度。即便I/O已经完成、进程变为就绪状态，也不能打断当前正在运行的进程。非抢占特性导致就绪进程需要等待，会拉长响应时间。
 ## Q8
 - Prediction / 预测:
 (s1)
@@ -239,4 +254,15 @@ Time        PID: 0        PID: 1           CPU           IOs
 CPU utilization:50%
 - Reasoning / 理由:不同随机种子生成不一样的CPU、I/O指令序列。指令序列决定什么时候发生I/O；调度策略控制I/O发生、I/O完成时如何切换进程，从而造成总时间、CPU利用率出现差异。预测基于对应种子生成的指令流分析进程状态变化。
 - Verified result / 验证结果:
-- Analysis / 分析:
+s1:
+Stats: Total Time 15
+Stats: CPU Busy 8 (53.33%)
+Stats: IO Busy  10 (66.67%)
+s2：
+Stats: Total Time 16
+Stats: CPU Busy 10 (62.50%)
+Stats: IO Busy  14 (87.50%)
+s3：
+Stats: Total Time 18
+Stats: CPU Busy 9 (50.00%)
+- Analysis / 分析: ‑s 随机种子决定CPU、I/O的指令序列； ‑S 与 ‑I 仅改变调度规则，不会修改指令流。 SWITCH_ON_END 不在I/O发生时切换进程，容易产生CPU空闲； IO_RUN_IMMEDIATE 更适合I/O密集的任务。不同种子产生不同指令，因此总运行时间会发生变化。
